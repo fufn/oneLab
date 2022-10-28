@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 )
 
+type userIDKey string
 type database map[string]bool
 
 var db database = database{
@@ -11,13 +13,19 @@ var db database = database{
 }
 
 func main() {
-	processRequest("jane")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	processRequest(ctx, "jane")
 }
 
-func processRequest(userid string) {
+func processRequest(ctx context.Context, userid string) {
 	// TODO: send userID information to checkMemberShip through context for
 	// map lookup.
-	ch := checkMemberShip()
+	vctx := context.WithValue(ctx,
+		userIDKey("userIDKey"),
+		userid)
+
+	ch := checkMemberShip(vctx)
 	status := <-ch
 	fmt.Printf("membership status of userid : %s : %v\n", userid, status)
 }
@@ -26,11 +34,12 @@ func processRequest(userid string) {
 // extracts the user id information from context.
 // spins a goroutine to do map lookup
 // sends the result on the returned channel.
-func checkMemberShip() <-chan bool {
+func checkMemberShip(ctx context.Context) <-chan bool {
 	ch := make(chan bool)
 	go func() {
 		defer close(ch)
 		// do some database lookup
+		userid := ctx.Value(userIDKey("userIDKey")).(string)
 		status := db[userid]
 		ch <- status
 	}()
